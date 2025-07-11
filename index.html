@@ -1,22 +1,24 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content=device-width, initial-scale=1.0 />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Qerion Admin Panel</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; background-color: #f4f4f4; }
     h1 { text-align: center; }
     .login-section, .panel-section { max-width: 700px; margin: auto; }
     .proof { background: #fff; padding: 15px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 0 5px #ccc; }
-    button { padding: 8px 12px; margin: 5px 5px 5px 0; }
+    button { padding: 8px 12px; margin: 5px 5px 5px 0; cursor: pointer; }
     .hidden { display: none; }
     input[type="password"], input[type="text"], select {
       width: 100%; padding: 10px; margin: 10px 0;
     }
     #controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 20px; }
     #proofList { margin-top: 10px; }
+    .status-pending { color: #e67e22; }
+    .status-approved { color: #27ae60; }
+    .status-rejected { color: #e74c3c; }
   </style>
 </head>
 <body>
@@ -38,12 +40,16 @@
         <option value="all">Show: All</option>
       </select>
       <input type="text" id="searchBox" placeholder="Search user ID or username" oninput="loadProofs()" />
+      <button onclick="logout()">Logout</button>
     </div>
     <div id="proofList">Loading...</div>
   </div>
 
   <script>
     const ADMIN_PASSWORD = "qerionadmin987";
+    const SUPABASE_URL = "https://ibjigvfbqdeyortbctra.supabase.co/rest/v1/tasks";
+    const SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliamlndmZicWRleW9ydGJjdHJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzOTM4MjgsImV4cCI6MjA2NTk2OTgyOH0.qE24RJCJrMJXcggy_f-6a2_fb5g-GhSOie-_Y2nE82c";
+
     let allProofs = [];
 
     function checkPassword() {
@@ -57,30 +63,54 @@
       }
     }
 
-    async function fetchProofs() {
-      const res = await fetch("https://ibjigvfbqdeyortbctra.supabase.co/rest/v1/tasks?select=*", {
-        headers: {
-          apikey: apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliamlndmZicWRleW9ydGJjdHJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzOTM4MjgsImV4cCI6MjA2NTk2OTgyOH0.qE24RJCJrMJXcggy_f-6a2_fb5g-GhSOie-_Y2nE82c"
+    function logout() {
+      document.getElementById("adminPanel").classList.add("hidden");
+      document.getElementById("loginSection").classList.remove("hidden");
+      document.getElementById("adminPassword").value = "";
+    }
 
-        }
-      });
-      allProofs = await res.json();
-      loadProofs();
+    async function fetchProofs() {
+      try {
+        document.getElementById("proofList").innerHTML = "Loading...";
+        const res = await fetch(SUPABASE_URL + "?select=*", {
+          headers: {
+            apikey: SUPABASE_API_KEY,
+            Authorization: `Bearer ${SUPABASE_API_KEY}`
+          }
+        });
+        
+        if (!res.ok) throw new Error('Failed to fetch data');
+        
+        allProofs = await res.json();
+        loadProofs();
+      } catch (error) {
+        console.error(error);
+        document.getElementById("proofList").innerHTML = "Error loading proofs. Please try again.";
+      }
     }
 
     function loadProofs() {
       const status = document.getElementById("statusFilter").value;
       const search = document.getElementById("searchBox").value.toLowerCase();
       const container = document.getElementById("proofList");
-      container.innerHTML = "";
+      
+      if (!allProofs.length) {
+        container.innerHTML = "<p>No proofs available</p>";
+        return;
+      }
 
       let filtered = allProofs;
+      
+      // Status filtering
       if (status !== "all") {
         filtered = filtered.filter(p => p.status === status);
       }
+      
+      // Search filtering
       if (search) {
-        filtered = filtered.filter(p =>
-          p.user_id.toLowerCase().includes(search) ||
+        filtered = filtered.filter(p => 
+          (p.user_id && p.user_id.toLowerCase().includes(search)) ||
+          (p.username && p.username.toLowerCase().includes(search)) ||
           (p.proof_text && p.proof_text.toLowerCase().includes(search))
         );
       }
@@ -90,34 +120,43 @@
         return;
       }
 
+      container.innerHTML = "";
       filtered.forEach(d => {
         const div = document.createElement("div");
         div.className = "proof";
         div.innerHTML = `
           <p><b>User ID:</b> ${d.user_id}</p>
+          ${d.username ? `<p><b>Username:</b> ${d.username}</p>` : ''}
           <p><b>Task:</b> ${d.task_name}</p>
           <p><b>Proof:</b> ${d.proof_text || 'N/A'}</p>
-          <p><b>Status:</b> ${d.status}</p>
+          <p><b>Status:</b> <span class="status-${d.status}">${d.status}</span></p>
+          <p><b>Date:</b> ${new Date(d.created_at).toLocaleString()}</p>
           ${d.status === "pending" ? `
             <button onclick="updateStatus('${d.id}', 'approved')">✅ Approve</button>
             <button onclick="updateStatus('${d.id}', 'rejected')">❌ Reject</button>
-          ` : ""}
+          ` : ''}
         `;
         container.appendChild(div);
       });
     }
 
     async function updateStatus(id, newStatus) {
-      await fetch(`https://ibjigvfbqdeyortbctra.supabase.co/rest/v1/tasks?id=eq.${id}`, {
-        method: "PATCH",
-        headers: {
-          apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-          "Content-Type": "application/json",
-          Prefer: "return=minimal"
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-      fetchProofs();
+      try {
+        await fetch(`${SUPABASE_URL}?id=eq.${id}`, {
+          method: "PATCH",
+          headers: {
+            apikey: SUPABASE_API_KEY,
+            Authorization: `Bearer ${SUPABASE_API_KEY}`,
+            "Content-Type": "application/json",
+            Prefer: "return=minimal"
+          },
+          body: JSON.stringify({ status: newStatus })
+        });
+        fetchProofs();
+      } catch (error) {
+        console.error("Update failed:", error);
+        alert('Status update failed. Please try again.');
+      }
     }
   </script>
 </body>
