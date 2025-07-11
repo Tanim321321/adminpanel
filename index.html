@@ -60,7 +60,8 @@
     async function fetchProofs() {
       const res = await fetch("https://ibjigvfbqdeyortbctra.supabase.co/rest/v1/tasks?select=*", {
         headers: {
-          apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          apikey: apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImliamlndmZicWRleW9ydGJjdHJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTAzOTM4MjgsImV4cCI6MjA2NTk2OTgyOH0.qE24RJCJrMJXcggy_f-6a2_fb5g-GhSOie-_Y2nE82c"
+
         }
       });
       allProofs = await res.json();
